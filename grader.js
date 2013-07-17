@@ -21,11 +21,15 @@ References:
    - https://developer.mozilla.org/en-US/docs/JSON#JSON_in_Firefox_2
 */
 
-var fs = require('fs');
+var fs      = require('fs');
 var program = require('commander');
+var util    = require('util');
 var cheerio = require('cheerio');
-var HTMLFILE_DEFAULT = "index.html";
+var restler = require('restler');
+
+var HTMLFILE_DEFAULT   = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var REMOTE_CHCK_SOURCE = 'remote.html';
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -61,14 +65,28 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var processChekcs = function(file, checks) {
+    console.log(JSON.stringify(checkHtmlFile(file, checks), null, 4));
+}
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-u, --url <url>', 'Url to check')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    if (program.url) {
+        restler.get(program.url).on('complete', function(result, response) {
+            if(result instanceof Error) {
+                console.error('Grabing error: ' + util.format(response.message));
+            } else {
+                fs.writeFileSync(REMOTE_CHCK_SOURCE, result);
+                processChekcs(REMOTE_CHCK_SOURCE, program.checks);
+            }
+        });
+    } else if (program.file) {
+        processChekcs(program.file, program.checks);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
